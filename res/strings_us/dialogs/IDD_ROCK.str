@@ -1,0 +1,61 @@
+// C4D-DialogResource
+
+DIALOGSTRINGS IDD_ROCK
+{
+  IDS_BUTTON    "RockIt!";
+  IDS_CHECK     "Round Geometry";
+  IDS_CHECK12   "Randomize Scale";
+  IDS_CHECK15   "Randomize Rotation";
+  IDS_CHECK18   "Use Normals";
+  IDS_CHECK2    "Subdivide";
+  IDS_CHECK22   "Randomize Materials";
+  IDS_CHECK3    "By Step";
+  IDS_CHECK4    "Enable Sub Polygon Displacement";
+  IDS_CHECK8    "Randomize Offset";
+  IDS_DIALOG    "RockGen";
+  IDS_RADIO13   "VrayBridge";
+  IDS_RADIO14   "Cinema 4D/AR";
+  IDS_RADIO4    "Mossy";
+  IDS_RADIO5    "Red Rock";
+  IDS_RADIO6    "White Rock";
+  IDS_RADIO7    "Asteroid";
+  IDS_RADIO8    "Jagged";
+  IDS_STATIC    "Mesh Destruction";
+  IDS_STATIC14  "Mesh Scale";
+  IDS_STATIC15  "Crumple Surface";
+  IDS_STATIC16  "Subdivisions";
+  IDS_STATIC18  "LOD";
+  IDS_STATIC19  "Mesh Options";
+  IDS_STATIC24  "Material Preset";
+  IDS_STATIC25  "Preset Group";
+  IDS_STATIC26  "Random Shape   ";
+  IDS_STATIC27  "Gruppe";
+  IDS_STATIC28  "Main";
+  IDS_STATIC29  "Material Options";
+  IDS_STATIC31  "Renderer Group";
+  IDS_STATIC32  "Renderer";
+  IDS_STATIC33  "Displacement";
+  IDS_STATIC35  "SPD Subdivisions";
+  IDS_STATIC36  "Distribution";
+  IDS_STATIC37  "Surface";
+  IDS_STATIC38  "Object";
+  IDS_STATIC39  "Transformation";
+  IDS_STATIC4   "RockGen Options";
+  IDS_STATIC40  "Offset.X";
+  IDS_STATIC41  "Offset.Y";
+  IDS_STATIC42  "Offset.Z";
+  IDS_STATIC46  "Trans_OFF";
+  IDS_STATIC47  "Trans_ROT";
+  IDS_STATIC48  "Rotation.H";
+  IDS_STATIC49  "Rotation.P";
+  IDS_STATIC50  "Rotation.B";
+  IDS_STATIC51  "Trans_SCALE";
+  IDS_STATIC52  "Scale.X";
+  IDS_STATIC53  "Scale.Y";
+  IDS_STATIC54  "Scale.Z";
+  IDS_STATIC56  "Gruppe";
+  IDS_STATIC63  "Gruppe";
+  IDS_STATIC64  "Gruppe";
+  IDS_STATIC65  "Material Distribution";
+  IDS_STATIC66  "Gruppe";
+}
