@@ -1,0 +1,388 @@
+////////////////////
+// RockGenPlugin
+//IDC_EDIT_SHAPESMOOTH
+//IDC_EDIT_DESTRUCT
+//IDC_EDIT_SCALE
+//IDC_EDIT_SUBDIVS
+//IDC_BTN_APPLY
+//IDC_CHK_SUBDIVS
+//IDC_CHK_ROUND
+//IDC_BANNER
+//IDC_REND_C4D
+//IDC_ENABLE_DISP
+//IDC_DISP_AMT
+//IDC_CHK_STPRAND
+//HIE
+
+var PLUGIN_ID = 1023764;
+var PLUGIN_NAME = "RockGen";
+var PLUGIN_HELP = "Generate ROCKS!";
+var PLUGIN_ICON = "Icon.tif";
+var PLUGIN_BANNER = "banner.jpg";
+var ID_ROCKGENOBJECT = 1026572;
+var ID_ISROCKGENMAT = 9999;
+var MyResource, MyIcon;
+var edt_subdivs, edt_shapesmooth, edt_destruct, edt_scale, edt_banner, edt_seed, chk_subdivs, chk_round, polyrand;
+var d;
+include "c4d_symbols.h"
+
+class RockGenObject : PolygonObject {
+public:
+	RockGenObject();
+	SetDistortion();
+}
+RockGenObject::RockGenObject() { super(); }
+RockGenObject::SetDistortion() {
+	var rock_bc = RockGenObject->GetContainer();
+	var i;  
+	for (i=0; i <= RockGenObject->GetPolygonCount(); i++){
+			var RockPoly = new(BaseSelect);
+			RockPoly->Select((int(polyrand->Get01() * i)));
+			RockGenObject->SetPolygonSelection(RockPoly);
+			rock_bc->SetData(MDATA_NORMALMOVE_VALUE , (int(polyrand->Get01() * i))*edt_destruct/100/(edt_subdivs+1));
+			SendModelingCommand(ID_MODELING_NORMALMOVE_TOOL, NULL, RockGenObject, rock_bc, MODIFY_POLYGONSELECTION);
+		}
+}
+IsRock(RockObject) {
+	var rock_bc = RockObject->GetContainer();
+	var is = rock_bc->GetData(ID_ROCKGENOBJECT);
+	return is;
+}
+DoRock(RockObject) {
+	var rock_bc = RockObject->GetContainer();
+	rock_bc->SetData(ID_ROCKGENOBJECT, true);
+	var ret = RockObject->SetContainer(rock_bc);
+	RockObject->Message(MSG_UPDATE);
+	return ret;
+}
+UndoRock(RockObject) {
+	var rock_bc = RockObject->GetContainer();
+	if (rock_bc->GetData(ID_ROCKGENOBJECT)) {
+		rock_bc->SetData(ID_ROCKGENOBJECT, null);
+		RockObject->SetContainer(rock_bc);
+		gc();
+		RockObject->Message(MSG_UPDATE);
+		return true;
+	}
+	else { return false; }
+}
+SaveTags(op) {
+	var tag = op->GetFirstTag();
+	if(!tag) { return; }
+	var cnt = 1;
+	///Count number of tags
+	while (tag) {
+		tag = tag->GetNext();
+		if(tag) { cnt++; }
+	}
+	tag = op->GetFirstTag();
+	var tags = new(array,cnt);
+	var i = 0;
+	///Save Tags
+	while (tag && i<cnt) {
+		tags[i] = tag->GetClone();
+		tag = tag->GetNext();
+		i++;
+	}
+	return tags;
+}
+RestoreTags(op,tags) {
+	var cnt = sizeof(tags);
+	var i;
+	for(i=0; i<cnt; i++) {
+		op->InsertTag(tags[cnt-i-1]);
+		println(tags[cnt-i-1]->GetName(), " inserted");
+	}
+	///Count number of tags
+	var ncnt = 1;
+	var tag = op->GetFirstTag();
+	while (tag) {
+		tag = tag->GetNext();
+		if(tag) { cnt++; }
+	}
+	if(ncnt != cnt) { return false; }
+	return true;
+}
+MeshRocker(RockObject) {
+	var rock_bc = RockObject->GetContainer();
+	var i;  
+	for (i=0; i <= RockObject->GetPolygonCount(); i++){
+			var RockPoly = new(BaseSelect);
+			RockPoly->Select((int(polyrand->Get01() * i)));
+			RockObject->SetPolygonSelection(RockPoly);
+			rock_bc->SetData(MDATA_NORMALMOVE_VALUE , (int(polyrand->Get01() * i))*edt_destruct/100/(edt_subdivs+1));
+			SendModelingCommand(ID_MODELING_NORMALMOVE_TOOL, NULL, RockObject, rock_bc, MODIFY_POLYGONSELECTION);
+		}
+}
+CreateRock()
+{
+	StopAllThreads();		
+	
+	var doc = GetActiveDocument();
+	var RockObject, rock_bc, RockPosition, RockTags, parent, prev;
+	
+	RockObject = doc->GetActiveObject();
+	RockPosition = vector(0);
+
+	///If selected Object is a rock
+	if (RockObject && IsRock(RockObject) == true) {
+		parent = RockObject->GetUp();
+		prev = RockObject->GetNext();
+		RockTags = SaveTags(RockObject);
+		RockPosition = RockObject->GetPosition();
+		
+		RockObject->Remove();
+		gc();
+		doc->MultiMessage(MSG_UPDATE);
+	}
+	//rock_bc = RockObject->GetContainer();
+	//println("Create rock: ", rock_bc->GetData(ID_ROCKGENOBJECT));
+
+	///---Create a Rock---//
+	RockObject = AllocObject(Ocube);
+	RockObject#PRIM_CUBE_LEN = edt_scale;
+	rock_bc = RockObject->GetContainer();
+	
+	doc->InsertObject(RockObject,parent,prev);
+	RockObject->SetName("RockGenObject");
+	RockObject->SetPosition(RockPosition);	
+	
+	///Make Editable
+	doc->SetActiveObject(RockObject);
+	SendModelingCommand(MCOMMAND_MAKEEDITABLE, doc, RockObject, rock_bc, MODIFY_ALL);
+	RockObject = doc->GetActiveObject();
+	rock_bc = RockObject->GetContainer();
+
+	if(!RockTags) {
+	///Phongtag
+		var RockPhongTag = AllocTag(Tphong);
+		RockPhongTag#PHONGTAG_PHONG_ANGLELIMIT = TRUE;
+		RockPhongTag#PHONGTAG_PHONG_ANGLE = PI*80/180;
+		RockPhongTag#PHONGTAG_PHONG_USEEDGES = TRUE;
+		RockObject->InsertTag(RockPhongTag,NULL);
+	}
+	else {
+		RestoreTags(RockObject,RockTags);
+		RockTags = null;
+		gc();
+	}
+	
+	//println(DoRock(RockObject));
+	var rock_bc = RockObject->GetContainer();
+	rock_bc->SetData(ID_ROCKGENOBJECT, true);
+	var ret = RockObject->SetContainer(rock_bc);
+	//RockObject->Message(MSG_UPDATE);
+	
+///What is this part for ?//
+	rock_bc->SetData(MDATA_SUBDIVIDE_HYPER, TRUE);
+	rock_bc->SetData(MDATA_SUBDIVIDE_ANGLE, PI);
+	rock_bc->SetData(MDATA_SUBDIVIDE_SUB, 2);
+	SendModelingCommand(MCOMMAND_SUBDIVIDE, NULL, RockObject, rock_bc, MODIFY_ALL);
+
+	rock_bc->SetData(MDATA_SETVALUE_SETX, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
+	rock_bc->SetData(MDATA_SETVALUE_SETY, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
+	rock_bc->SetData(MDATA_SETVALUE_SETZ, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
+	rock_bc->SetData(MDATA_SETVALUE_VAL, vector(edt_shapesmooth+10,edt_shapesmooth+10,edt_shapesmooth+10));
+	SendModelingCommand(ID_MODELING_SETVALUE_TOOL, doc, RockObject, rock_bc, MODIFY_ALL);
+///---end here---//
+
+	MeshRocker(RockObject);
+	
+	if (chk_subdivs){
+		rock_bc->SetData(MDATA_SUBDIVIDE_HYPER, chk_round);
+		rock_bc->SetData(MDATA_SUBDIVIDE_ANGLE, PI);
+		rock_bc->SetData(MDATA_SUBDIVIDE_SUB, edt_subdivs);
+		SendModelingCommand(MCOMMAND_SUBDIVIDE, NULL, RockObject, rock_bc, MODIFY_ALL);
+	}
+	
+	RockObject->SetContainer(rock_bc);
+	DrawViews(DA_FORCEFULLREDRAW);
+	return TRUE;
+
+}
+LoadIcon(name)
+{
+	var file = GeGetRootFilename() ;
+	file->RemoveLast()   ;
+	file->AddLast("res") ;
+	file->AddLast(name) ;
+	var ico = new(BaseBitmap, 1, 1) ;
+	ico->Load(file) ;
+	return ico ;
+}
+LoadResource()
+{
+	var file = GeGetRootFilename(); if (!file) return NULL ;
+	file->RemoveLast() ;
+	var res = new(GeResource, file) ;
+	if (!res) return NULL ;
+	return res ;
+}
+class MyUserArea : GeUserArea
+{
+private:
+	var bbm;
+public:
+	MyUserArea(id,dialog);
+	Init();
+	GetUserWidth();
+	GetUserHeight();
+	Draw(x1,y1,x2,y2);
+}
+MyUserArea::MyUserArea(id,dialog)
+{
+	super(id,dialog);
+}
+MyUserArea::Init()
+{
+	var file = GeGetRootFilename();
+	file->RemoveLast();
+	file->AddLast("res");
+	file->AddLast(PLUGIN_BANNER);
+	bbm = new(BaseBitmap, 400,50);
+	bbm->Load(file, 0);
+	Redraw();
+}
+MyUserArea::GetUserWidth()
+{
+	return 400;
+}
+MyUserArea::GetUserHeight()
+{
+	return 50;
+}
+MyUserArea::Draw(x1,y1,x2,y2)
+{
+	OffScreenOn();
+	SetClippingRegion(x1,y1,x2,y2);
+	DrawBitmap(bbm, 0, 0, 400, 50, 0, 0, 400, 50, BMP_NORMALSCALED);
+}
+class RockGenPlugin : MenuPlugin
+{
+public:
+	RockGenPlugin();
+	GetID();
+	GetHelp();
+	GetName();
+	GetIcon();
+	Execute(doc);
+	RestoreLayout(secret);
+}
+class RockGenDialog : GeDialog
+{
+private:
+	var ua;
+public:
+	RockGenDialog();
+	CreateLayout();
+	Init();
+	Command(id,msg);
+}
+RockGenDialog::Init()
+{
+	SetInt(IDC_EDIT_SEED, 12345, 0, 99999, 1);
+	SetFloat(IDC_EDIT_SHAPESMOOTH, 5, 0, 100, 1);
+	SetFloat(IDC_EDIT_DESTRUCT, 25, 0, 100, 0.01);
+	SetInt(IDC_EDIT_SUBDIVS, 0, 0, 2, 1);
+	Enable(IDC_CHK_ROUND, FALSE);
+	SetCheckbox(IDC_CHK_STPRAND, TRUE);
+	Enable(GRP_SURFACE, FALSE);
+	Enable(GRP_TRANS, FALSE);
+	Enable(GRP_MAT_DIST, FALSE);
+	SetFloat(EDT_SCA_X,100,0,999999,1);
+	SetFloat(EDT_SCA_Y,100,0,999999,1);
+	SetFloat(EDT_SCA_Z,100,0,999999,1);
+	return TRUE;
+}
+RockGenDialog::RockGenDialog()
+{
+	super(PLUGIN_ID);
+	ua=NULL;
+}
+RockGenDialog::CreateLayout()
+{
+	LoadDialogResource (IDD_ROCK, MyResource, 1);
+	ua = new(MyUserArea, IDC_BANNER,this);
+	return;
+}
+RockGenDialog::Command(id,msg)
+{
+	//Activate(IDC_MAT_OPT);
+	edt_seed = GetInt(IDC_EDIT_SEED);
+	edt_shapesmooth = GetFloat(IDC_EDIT_SHAPESMOOTH);
+	edt_destruct = GetFloat(IDC_EDIT_DESTRUCT);
+	edt_subdivs = GetInt(IDC_EDIT_SUBDIVS);
+	chk_subdivs = GetCheckbox(IDC_CHK_SUBDIVS);
+	chk_round = GetCheckbox(IDC_CHK_ROUND);
+	edt_scale = vector(GetFloat(EDT_SCA_X),GetFloat(EDT_SCA_Y),GetFloat(EDT_SCA_Z));
+	if (GetCheckbox(IDC_CHK_SUBDIVS))
+	{
+		Enable(IDC_CHK_ROUND, TRUE);
+		Enable(IDC_EDIT_SUBDIVS, TRUE);
+	}
+	else
+	{
+		Enable(IDC_CHK_ROUND, FALSE);
+		Enable(IDC_EDIT_SUBDIVS, FALSE);
+	}
+	if (!GetCheckbox(IDC_CHK_STPRAND)) {
+		polyrand->Init(edt_seed);
+	}
+	if (id==IDC_BTN_APPLY) CreateRock();
+	EventAdd();
+	DrawViews(DA_FORCEFULLREDRAW);
+	ua->Redraw();
+	return TRUE;
+}
+RockGenPlugin::RockGenPlugin()
+{
+	super();
+}
+RockGenPlugin::GetID()
+{
+	return PLUGIN_ID;
+}
+RockGenPlugin::GetName()
+{
+	return PLUGIN_NAME;
+}
+RockGenPlugin::GetIcon()
+{
+	return MyIcon;
+}
+RockGenPlugin::GetHelp()
+{
+	return PLUGIN_HELP;
+}
+RockGenPlugin::Execute(doc)
+{
+	d->Open(TRUE, -1,-1);
+	DrawViews(DA_FORCEFULLREDRAW);
+	return TRUE;
+}
+RockGenPlugin::RestoreLayout(secret)
+{
+	if (!d) d = new(RockGenDialog);
+	d->RestoreLayout(secret);		
+}
+/////////
+// Main
+main()
+{
+	d = new(RockGenDialog);
+	MyResource = LoadResource() ;
+	if(!MyResource)
+	{
+		println(PLUGIN_NAME + " : Error while loading resources.");
+		return;
+	}
+	else {
+		println("--------------------------------------------------------------------------------------------");
+		println(" RockGen 1.0 BETA successfully loaded. Keep on Rocking! :-)");
+		println("--------------------------------------------------------------------------------------------");
+	}
+	MyIcon = LoadIcon(PLUGIN_ICON);
+	Register(RockGenPlugin);
+	polyrand = new(Random);
+	polyrand->Init(12345);
+}
