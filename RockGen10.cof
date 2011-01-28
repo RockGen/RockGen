@@ -26,23 +26,49 @@ var edt_subdivs, edt_shapesmooth, edt_destruct, edt_scale, edt_banner, edt_seed,
 var d;
 include "c4d_symbols.h"
 
-class RockGenObject : PolygonObject {
+/*class RockGenObject : PolygonObject {
 public:
 	RockGenObject();
+	Init();
 	SetDistortion();
+	ScalePoints(vec);
 }
-RockGenObject::RockGenObject() { super(); }
+RockGenObject::RockGenObject() { 
+	super();
+	return true;
+}
+RockGenObject::Init() {
+	var cub = AllocObject(Ocube);
+	cub#PRIM_CUBE_LEN = vector(100,100,100);
+	var doc = GetActiveDocument();
+	doc->InsertObject(cub,null,null);
+	doc->SetActiveObject(cub);
+	var bc = cub->GetContainer();
+	SendModelingCommand(MCOMMAND_MAKEEDITABLE, doc, cub, bc, MODIFY_ALL);
+	cub = doc->GetActiveObject();
+	var ply = cub->GetPolygons();
+	this->SetPolygons(ply);
+	ply = nil;
+	return true;
+}
 RockGenObject::SetDistortion() {
-	var rock_bc = RockGenObject->GetContainer();
+	var rock_bc = this->GetContainer();
 	var i;  
-	for (i=0; i <= RockGenObject->GetPolygonCount(); i++){
+	for (i=0; i <= this->GetPolygonCount(); i++){
 			var RockPoly = new(BaseSelect);
 			RockPoly->Select((int(polyrand->Get01() * i)));
-			RockGenObject->SetPolygonSelection(RockPoly);
+			this->SetPolygonSelection(RockPoly);
 			rock_bc->SetData(MDATA_NORMALMOVE_VALUE , (int(polyrand->Get01() * i))*edt_destruct/100/(edt_subdivs+1));
-			SendModelingCommand(ID_MODELING_NORMALMOVE_TOOL, NULL, RockGenObject, rock_bc, MODIFY_POLYGONSELECTION);
+			SendModelingCommand(ID_MODELING_NORMALMOVE_TOOL, NULL, this, rock_bc, MODIFY_POLYGONSELECTION);
 		}
 }
+RockGenObject::ScalePoints(vec) {
+	var cnt = this->GetPointCount();	var i;
+	for (i=0; i<cnt; i++) {
+		this->SetPoint(this->GetPoint(i)*vec);
+	}
+}
+*/
 IsRock(RockObject) {
 	var rock_bc = RockObject->GetContainer();
 	var is = rock_bc->GetData(ID_ROCKGENOBJECT);
@@ -60,7 +86,6 @@ UndoRock(RockObject) {
 	if (rock_bc->GetData(ID_ROCKGENOBJECT)) {
 		rock_bc->SetData(ID_ROCKGENOBJECT, null);
 		RockObject->SetContainer(rock_bc);
-		gc();
 		RockObject->Message(MSG_UPDATE);
 		return true;
 	}
@@ -90,8 +115,7 @@ RestoreTags(op,tags) {
 	var cnt = sizeof(tags);
 	var i;
 	for(i=0; i<cnt; i++) {
-		op->InsertTag(tags[cnt-i-1]);
-		println(tags[cnt-i-1]->GetName(), " inserted");
+		op->InsertTag(tags[(cnt-1)-i]);
 	}
 	///Count number of tags
 	var ncnt = 1;
@@ -103,49 +127,72 @@ RestoreTags(op,tags) {
 	if(ncnt != cnt) { return false; }
 	return true;
 }
-MeshRocker(RockObject) {
-	var rock_bc = RockObject->GetContainer();
+MeshRocker(RockObject,sub,subdivs,round) {
+	var doc = GetActiveDocument();
+	var rock_bc = new(BaseContainer);
 	var i;  
 	for (i=0; i <= RockObject->GetPolygonCount(); i++){
-			var RockPoly = new(BaseSelect);
-			RockPoly->Select((int(polyrand->Get01() * i)));
-			RockObject->SetPolygonSelection(RockPoly);
-			rock_bc->SetData(MDATA_NORMALMOVE_VALUE , (int(polyrand->Get01() * i))*edt_destruct/100/(edt_subdivs+1));
-			SendModelingCommand(ID_MODELING_NORMALMOVE_TOOL, NULL, RockObject, rock_bc, MODIFY_POLYGONSELECTION);
-		}
+		var RockPoly = new(BaseSelect);
+		RockPoly->Select((int(polyrand->Get01() * i)));
+		RockObject->SetPolygonSelection(RockPoly);
+		rock_bc->SetData(MDATA_NORMALMOVE_VALUE , (int(polyrand->Get01() * i))*edt_destruct/100/(edt_subdivs+1));
+		SendModelingCommand(ID_MODELING_NORMALMOVE_TOOL, NULL, RockObject, rock_bc, MODIFY_POLYGONSELECTION);
+	}
+	
+	rock_bc->SetData(MDATA_SUBDIVIDE_HYPER, round);
+	rock_bc->SetData(MDATA_SUBDIVIDE_ANGLE, PI);
+	rock_bc->SetData(MDATA_SUBDIVIDE_SUB, 1);
+	SendModelingCommand(MCOMMAND_SUBDIVIDE, NULL, RockObject, rock_bc, MODIFY_ALL);
+	if (sub == true && subdivs > 0) {
+		rock_bc->SetData(MDATA_SUBDIVIDE_HYPER, round);
+		rock_bc->SetData(MDATA_SUBDIVIDE_ANGLE, PI);
+		rock_bc->SetData(MDATA_SUBDIVIDE_SUB, subdivs);
+		SendModelingCommand(MCOMMAND_SUBDIVIDE, NULL, RockObject, rock_bc, MODIFY_ALL);
+	}
+
+	rock_bc->SetData(MDATA_SETVALUE_SETX, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
+	rock_bc->SetData(MDATA_SETVALUE_SETY, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
+	rock_bc->SetData(MDATA_SETVALUE_SETZ, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
+	rock_bc->SetData(MDATA_SETVALUE_VAL, vector(edt_shapesmooth+10,edt_shapesmooth+10,edt_shapesmooth+10));
+	SendModelingCommand(ID_MODELING_SETVALUE_TOOL, doc, RockObject, rock_bc, MODIFY_ALL);
 }
 CreateRock()
 {
-	StopAllThreads();		
-	
 	var doc = GetActiveDocument();
 	var RockObject, rock_bc, RockPosition, RockTags, parent, prev;
 	
-	RockObject = doc->GetActiveObject();
+	var ac = doc->GetActiveObject();
 	RockPosition = vector(0);
 
 	///If selected Object is a rock
-	if (RockObject && IsRock(RockObject) == true) {
-		parent = RockObject->GetUp();
-		prev = RockObject->GetNext();
-		RockTags = SaveTags(RockObject);
-		RockPosition = RockObject->GetPosition();
+	if (ac && IsRock(ac) == true) {
+		parent = ac->GetUp();
+		prev = ac->GetNext();
+		RockTags = SaveTags(ac);
+		RockPosition = ac->GetPosition();
 		
-		RockObject->Remove();
-		gc();
+		var suc = ac->Remove();
+		switch (suc) {
+			case 0:
+				println("//--RockGenMessage: failed removing old rock...");
+				break;
+			case 1:
+				println("//--RockGenMessage: old rock successfully removed...");
+				break;
+			default:
+				println("//--RockGenMessage: WTF ?! How can a boolean function return ", suc, " ???!! O.o");
+				break;
+		}
 		doc->MultiMessage(MSG_UPDATE);
 	}
-	//rock_bc = RockObject->GetContainer();
-	//println("Create rock: ", rock_bc->GetData(ID_ROCKGENOBJECT));
-
+	
 	///---Create a Rock---//
 	RockObject = AllocObject(Ocube);
-	RockObject#PRIM_CUBE_LEN = edt_scale;
+	RockObject#PRIM_CUBE_LEN = edt_scale; RockObject->Message(MSG_UPDATE);
 	rock_bc = RockObject->GetContainer();
-	
 	doc->InsertObject(RockObject,parent,prev);
 	RockObject->SetName("RockGenObject");
-	RockObject->SetPosition(RockPosition);	
+	//RockObject->SetPosition(RockPosition);	
 	
 	///Make Editable
 	doc->SetActiveObject(RockObject);
@@ -153,50 +200,26 @@ CreateRock()
 	RockObject = doc->GetActiveObject();
 	rock_bc = RockObject->GetContainer();
 
-	if(!RockTags) {
-	///Phongtag
+	if(!RockTags) {		//add a phongtag
 		var RockPhongTag = AllocTag(Tphong);
 		RockPhongTag#PHONGTAG_PHONG_ANGLELIMIT = TRUE;
 		RockPhongTag#PHONGTAG_PHONG_ANGLE = PI*80/180;
 		RockPhongTag#PHONGTAG_PHONG_USEEDGES = TRUE;
 		RockObject->InsertTag(RockPhongTag,NULL);
 	}
-	else {
+	else {				//Restore tags
+		RockObject->GetFirstTag()->Remove();
 		RestoreTags(RockObject,RockTags);
 		RockTags = null;
-		gc();
 	}
-	
-	//println(DoRock(RockObject));
-	var rock_bc = RockObject->GetContainer();
+
 	rock_bc->SetData(ID_ROCKGENOBJECT, true);
-	var ret = RockObject->SetContainer(rock_bc);
-	//RockObject->Message(MSG_UPDATE);
-	
-///What is this part for ?//
-	rock_bc->SetData(MDATA_SUBDIVIDE_HYPER, TRUE);
-	rock_bc->SetData(MDATA_SUBDIVIDE_ANGLE, PI);
-	rock_bc->SetData(MDATA_SUBDIVIDE_SUB, 2);
-	SendModelingCommand(MCOMMAND_SUBDIVIDE, NULL, RockObject, rock_bc, MODIFY_ALL);
+	RockObject->SetContainer(rock_bc);
 
-	rock_bc->SetData(MDATA_SETVALUE_SETX, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
-	rock_bc->SetData(MDATA_SETVALUE_SETY, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
-	rock_bc->SetData(MDATA_SETVALUE_SETZ, MDATA_SETVALUE_CRUMPLE_ALONGNORMALS);
-	rock_bc->SetData(MDATA_SETVALUE_VAL, vector(edt_shapesmooth+10,edt_shapesmooth+10,edt_shapesmooth+10));
-	SendModelingCommand(ID_MODELING_SETVALUE_TOOL, doc, RockObject, rock_bc, MODIFY_ALL);
-///---end here---//
-
-	MeshRocker(RockObject);
-	
-	if (chk_subdivs){
-		rock_bc->SetData(MDATA_SUBDIVIDE_HYPER, chk_round);
-		rock_bc->SetData(MDATA_SUBDIVIDE_ANGLE, PI);
-		rock_bc->SetData(MDATA_SUBDIVIDE_SUB, edt_subdivs);
-		SendModelingCommand(MCOMMAND_SUBDIVIDE, NULL, RockObject, rock_bc, MODIFY_ALL);
-	}
+	MeshRocker(RockObject,chk_subdivs,edt_subdivs,chk_round);
 	
 	RockObject->SetContainer(rock_bc);
-	DrawViews(DA_FORCEFULLREDRAW);
+	//DrawViews(DA_FORCEFULLREDRAW);
 	return TRUE;
 
 }
